@@ -18,6 +18,13 @@ The tool should allow users to run available scripts without cloning or pulling 
 - FR-08: New tools can be added by placing scripts in the repository and adding them to the manifest.
 - FR-09: Scripts can be organized by category.
 - FR-10: Arguments can be forwarded to selected scripts.
+FR-11: sx-ctl supports an optional local private overlay.
+FR-12: sx-ctl includes tools from the private overlay only if the overlay exists.
+FR-13: sx-ctl can run private scripts from the local overlay.
+FR-14: sx-ctl supports a source field in the manifest.
+FR-15: sx-ctl supports private configuration conventions such as private env files.
+FR-16: sx-ctl does not automatically load private env files in the core.
+FR-17: sx-ctl should support future private admin scripts.
 
 ## Non-Functional Requirements
 
@@ -29,6 +36,10 @@ The tool should allow users to run available scripts without cloning or pulling 
 - NFR-06: Error messages should be understandable.
 - NFR-07: Remote code execution risks should be documented in the README.
 - NFR-08: The project should be easy to extend with new scripts.
+NFR-09: Private overlay support must not break public-only usage.
+NFR-10: Private script paths must be validated.
+NFR-11: sx-ctl should not require Git for public usage.
+NFR-12: Git is only needed for private overlay setup/update.
 
 ## Out of Scope for Version 1
 
@@ -38,3 +49,7 @@ The tool should allow users to run available scripts without cloning or pulling 
 - Running scripts from external repositories.
 - Complex plugin management.
 - Local caching.
+- Multiple overlays are out of scope for v1.
+- Automatic dependency installation remains out of scope.
+- Automatic secret synchronization remains out of scope.
+- GitHub API token handling remains out of scope.

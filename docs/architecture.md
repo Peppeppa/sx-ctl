@@ -2,27 +2,34 @@
 
 ## Overview
 
-`sx-ctl` is a lightweight command-line launcher for running shell scripts hosted in this GitHub repository.
+`sx-ctl` is a lightweight command-line launcher for running shell scripts from a GitHub repository.
 
-The main idea is that users can run tools without cloning the repository and without manually pulling updates. The launcher downloads only the files that are required for the current command.
+The main idea is that users can run tools without cloning the public repository and without manually pulling updates. The public launcher downloads only the files that are required for the current command.
 
-`sx-ctl` supports two usage modes:
+`sx-ctl` supports two main usage modes:
 
 1. Direct execution via `curl`
 2. Installed usage through a local `sx-ctl` command
 
-The project is intentionally designed to stay small, portable and easy to extend.
+The public repository contains the core framework, public scripts, documentation, templates and installer logic.
+
+Additionally, `sx-ctl` supports an optional local private overlay. This overlay can contain private scripts, private configuration and private admin tools. If the private overlay exists, its tools are shown together with the public tools. If it does not exist, `sx-ctl` works normally with public tools only.
+
+The project is intentionally designed to stay small, portable, modular and easy to extend.
 
 ---
 
 ## Goals
 
-- Provide a simple command-line interface for running scripts from this repository.
-- Allow scripts to be updated centrally through GitHub.
-- Avoid requiring users to clone or pull the repository.
+- Provide a simple command-line interface for running shell scripts.
+- Allow public scripts to be updated centrally through the public GitHub repository.
+- Avoid requiring users to clone or pull the public repository.
+- Download only files required for the selected action.
 - Support minimal Linux systems through a basic frontend.
 - Support an enhanced terminal UI when optional tools like `fzf` are available.
 - Allow quick addition of normal `sh` or `bash` scripts.
+- Support an optional local private overlay for personal scripts and configuration.
+- Keep public-only usage working even when no private overlay exists.
 - Keep the architecture understandable for a small software engineering project.
 
 ---
@@ -34,18 +41,24 @@ The first version of `sx-ctl` does not aim to provide:
 - automatic dependency installation
 - a shared runtime library for all scripts
 - local caching
-- execution of scripts from external repositories
+- offline execution
+- execution of scripts from arbitrary external repositories
 - graphical user interfaces
 - complex plugin management
-- user authentication
+- GitHub API token handling
+- automatic secret synchronization
 - package management
 - rollback functionality
+- checksum verification
+- full multi-overlay management
 
 These features may be considered later, but they are intentionally out of scope for version 1.
 
 ---
 
 ## Repository Structure
+
+Public repository:
 
 ```text
 sx-ctl/
@@ -74,13 +87,37 @@ sx-ctl/
     └── roadmap.md
 ```
 
+Optional local private overlay:
+
+```text
+~/.config/sx-ctl/overlays/private/
+├── env
+├── manifest.txt
+├── scripts/
+│   ├── personal/
+│   │   └── weather.sh
+│   └── admin/
+│       ├── add-script.sh
+│       ├── validate-manifest.sh
+│       ├── update-private.sh
+│       └── status.sh
+└── templates/
+    └── private-script-template.sh
+```
+
+The private overlay is not part of the public repository. It can be managed through a separate private Git repository, for example:
+
+```sh
+git clone git@github.com:Peppeppa/sx-ctl-private.git ~/.config/sx-ctl/overlays/private
+```
+
 ---
 
 ## Components
 
 ### `sx-ctl.sh`
 
-`sx-ctl.sh` is the main entrypoint of the project.
+`sx-ctl.sh` is the main public entrypoint of the project.
 
 Responsibilities:
 
@@ -101,6 +138,8 @@ With arguments:
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Peppeppa/sx-ctl/main/sx-ctl.sh | sh -s -- system.info
 ```
+
+The entrypoint should remain small. It should only choose and load the appropriate frontend.
 
 ---
 
@@ -144,13 +183,15 @@ It should not require:
 Responsibilities:
 
 - provide a searchable terminal UI using `fzf`
-- display tool IDs, categories, labels and descriptions
+- display tool IDs, sources, categories, labels and risk levels
 - improve usability for larger tool collections
 - call the shared core logic to execute tools
 
 If `fzf` is not available, the main entrypoint should normally fall back to the basic frontend.
 
 If the user explicitly requests fzf mode with `--fzf`, the tool should print a clear error message when `fzf` is missing.
+
+The fzf frontend is optional. It must not be required for core functionality.
 
 ---
 
@@ -160,21 +201,27 @@ If the user explicitly requests fzf mode with `--fzf`, the tool should print a c
 
 Responsibilities:
 
-- define the base URL for raw GitHub files
+- define the public raw GitHub base URL
 - fetch remote files using `curl` or `wget`
-- load `manifest.txt`
+- load the public manifest
+- discover the optional private overlay
+- load the private manifest if it exists
+- combine public and private manifest entries
 - list available tools
-- resolve a tool ID to a script path
-- determine which shell should execute a script
-- download the selected script to a temporary file
-- execute the selected script
+- resolve a tool ID to a manifest entry
+- determine script source, path and shell
+- execute public scripts from GitHub raw URLs
+- execute private scripts from the local private overlay
 - clean up temporary files
 - forward arguments to the selected script
 - return the exit status of the executed script
+- print clear error messages
 
 The core should not contain UI-specific logic.
 
 It should not decide how the user selects a tool. It should only provide functions that frontends can call.
+
+The core should not automatically load private environment files. Private scripts may load private configuration themselves when needed.
 
 ---
 
@@ -185,6 +232,7 @@ It should not decide how the user selects a tool. It should only provide functio
 It is the single source of truth for:
 
 - available tool IDs
+- script source
 - categories
 - display names
 - script paths
@@ -196,26 +244,36 @@ It is the single source of truth for:
 Planned format:
 
 ```text
-id|category|label|path|description|shell|deps|risk
+id|source|category|label|path|description|shell|deps|risk
 ```
 
-Example:
+Public manifest example:
 
 ```text
-system.info|system|Systeminformationen|scripts/system/info.sh|Zeigt Systeminformationen|sh|uname,df|low
-network.ports|network|Offene Ports|scripts/network/ports.sh|Zeigt offene Ports|sh|ss,netstat|low
-docker.cleanup|docker|Docker Cleanup|scripts/docker/cleanup.sh|Entfernt ungenutzte Docker-Ressourcen|bash|docker|medium
-misc.hello|misc|Hello Demo|scripts/misc/hello.sh|Ein simples Testscript|bash|bash|low
+system.info|public|system|Systeminformationen|scripts/system/info.sh|Zeigt Systeminformationen|sh|uname,df|low
+network.ports|public|network|Offene Ports|scripts/network/ports.sh|Zeigt offene Ports|sh|ss,netstat|low
+docker.cleanup|public|docker|Docker Cleanup|scripts/docker/cleanup.sh|Entfernt ungenutzte Docker-Ressourcen|bash|docker|medium
+misc.hello|public|misc|Hello Demo|scripts/misc/hello.sh|Ein simples Testscript|bash|bash|low
+```
+
+Private manifest example:
+
+```text
+private.weather|private|personal|Privates Wetter|scripts/personal/weather.sh|Nutzt privaten Wohnort aus env|sh|curl|low
+admin.add-script|private|admin|Script hinzufügen|scripts/admin/add-script.sh|Fügt ein neues privates Script dem Manifest hinzu|bash|bash,git|medium
+admin.validate-manifest|private|admin|Manifest prüfen|scripts/admin/validate-manifest.sh|Prüft private Manifest-Einträge|sh|awk|low
+admin.update-private|private|admin|Private Tools aktualisieren|scripts/admin/update-private.sh|Führt git pull im privaten Overlay aus|sh|git|low
 ```
 
 Field meaning:
 
 | Field | Description |
 |---|---|
-| `id` | Stable command identifier, for example `system.info` |
-| `category` | Logical group, for example `system`, `network`, `docker` |
+| `id` | Stable command identifier, for example `system.info` or `private.weather` |
+| `source` | Script source, for example `public` or `private` |
+| `category` | Logical group, for example `system`, `network`, `docker`, `personal`, `admin` |
 | `label` | Human-readable name shown in menus |
-| `path` | Path to the script inside the repository |
+| `path` | Path to the script inside the public repository or private overlay |
 | `description` | Short explanation of what the script does |
 | `shell` | Shell used to execute the script, usually `sh` or `bash` |
 | `deps` | Informational list of dependencies |
@@ -223,11 +281,21 @@ Field meaning:
 
 The manifest is intentionally kept as a pipe-separated text file instead of JSON, because it can be parsed with standard shell tools.
 
+Manifest rules:
+
+- Field values should not contain the pipe character `|`.
+- Public tools should use `source=public`.
+- Private tools should use `source=private`.
+- Tool IDs should be unique across public and private manifests.
+- Script paths must be relative paths.
+- Private script paths must not contain `..`.
+- Private script paths must not be absolute paths.
+
 ---
 
 ### `scripts/`
 
-The `scripts/` directory contains the actual tools.
+The `scripts/` directory contains the actual public tools.
 
 Scripts may be organized by category:
 
@@ -243,8 +311,8 @@ Scripts do not need to follow a special framework.
 
 A script only needs to:
 
-1. exist in the repository
-2. be listed in `manifest.txt`
+1. exist in the repository or private overlay
+2. be listed in a manifest
 3. be executable with the shell defined in the manifest
 
 Both POSIX `sh` scripts and `bash` scripts are supported.
@@ -380,6 +448,177 @@ sx-ctl --fzf
 
 ---
 
+## Private Overlay
+
+The private overlay is an optional local extension mechanism.
+
+Default path:
+
+```text
+~/.config/sx-ctl/overlays/private
+```
+
+The private overlay can contain:
+
+- private scripts
+- a private manifest
+- private configuration
+- private admin tools
+- private script templates
+
+Example structure:
+
+```text
+~/.config/sx-ctl/overlays/private/
+├── env
+├── manifest.txt
+├── scripts/
+│   ├── personal/
+│   │   └── weather.sh
+│   └── admin/
+│       ├── add-script.sh
+│       ├── validate-manifest.sh
+│       ├── update-private.sh
+│       └── status.sh
+└── templates/
+    └── private-script-template.sh
+```
+
+If the private manifest exists, its tools are included in the global tool list.
+
+If the private manifest does not exist, the private overlay is ignored silently.
+
+Private scripts are executed locally. They are not downloaded from the public repository.
+
+The private overlay can be managed by a separate private Git repository:
+
+```sh
+git clone git@github.com:Peppeppa/sx-ctl-private.git ~/.config/sx-ctl/overlays/private
+```
+
+Git is not required for public usage. Git is only needed for setting up or updating the private overlay.
+
+---
+
+## Private Configuration
+
+Private configuration should not be stored in the public repository.
+
+The private overlay may contain an environment file:
+
+```text
+~/.config/sx-ctl/overlays/private/env
+```
+
+Example:
+
+```sh
+SX_HOME_CITY="Berlin"
+SX_COUNTRY="Germany"
+SX_WEATHER_UNITS="metric"
+```
+
+The core does not automatically load this file.
+
+Scripts that need private configuration can load it explicitly:
+
+```sh
+ENV_FILE="${SX_PRIVATE_ENV:-$HOME/.config/sx-ctl/overlays/private/env}"
+
+if [ -f "$ENV_FILE" ]; then
+  . "$ENV_FILE"
+fi
+```
+
+This keeps the core simple and avoids exposing private values to scripts that do not need them.
+
+Personal configuration such as a city name may be stored in the private overlay. Real secrets such as API tokens or passwords should be handled carefully and may require a stronger approach in future versions, such as local-only storage or encryption.
+
+---
+
+## Private Admin Tools
+
+Private admin tools are planned to live in the private overlay.
+
+Examples:
+
+```text
+admin.add-script
+admin.validate-manifest
+admin.update-private
+admin.status
+```
+
+These tools are not required for the public core to work.
+
+### `admin.add-script`
+
+Purpose:
+
+- interactively create a new private script
+- create the target file from a private template
+- add an entry to the private manifest
+- show Git status and next steps
+
+Possible workflow:
+
+```text
+Tool ID: private.weather
+Category: personal
+Label: Privates Wetter
+Path: scripts/personal/weather.sh
+Description: Uses private city from env
+Shell: sh
+Dependencies: curl
+Risk: low
+```
+
+Expected result:
+
+```text
+Created script:
+  scripts/personal/weather.sh
+
+Updated manifest:
+  manifest.txt
+
+Next steps:
+  git add manifest.txt scripts/personal/weather.sh
+  git commit -m "Add private.weather"
+  git push
+```
+
+### `admin.validate-manifest`
+
+Purpose:
+
+- validate field count
+- detect duplicate IDs
+- validate source values
+- validate shell values
+- check whether referenced scripts exist
+- detect unsafe paths
+
+### `admin.update-private`
+
+Purpose:
+
+- run `git pull --ff-only` inside the private overlay
+- print update status
+- fail clearly if the private overlay is not a Git repository
+
+### `admin.status`
+
+Purpose:
+
+- show private overlay path
+- show whether private manifest exists
+- show number of private tools
+- show Git status if available
+- show whether private env exists
+
+---
+
 ## Execution Flow
 
 ### Direct Execution via `curl`
@@ -399,9 +638,10 @@ sx-ctl-basic.sh or sx-ctl-fzf.sh
   v
 core.sh
   |
-  | loads manifest.txt
+  | loads public manifest
+  | loads private manifest if available
   | lists tools or resolves selected tool ID
-  | downloads selected script
+  | downloads public script or locates private script
   v
 tool script
 ```
@@ -429,11 +669,46 @@ sx-ctl-basic.sh or sx-ctl-fzf.sh
   v
 core.sh
   |
-  | loads manifest.txt
-  | resolves system.info
-  | downloads scripts/system/info.sh
+  | loads public manifest
+  | loads private manifest if available
+  | resolves selected tool ID
+  | executes selected script
   v
-scripts/system/info.sh
+tool script
+```
+
+---
+
+### Public Tool Execution
+
+```text
+User runs:
+  sx-ctl system.info
+
+core.sh:
+  loads public manifest
+  resolves system.info
+  detects source=public
+  downloads scripts/system/info.sh from GitHub raw
+  executes it with configured shell
+```
+
+---
+
+### Private Tool Execution
+
+```text
+User runs:
+  sx-ctl private.weather
+
+core.sh:
+  loads public manifest
+  loads private manifest if available
+  resolves private.weather
+  detects source=private
+  resolves local path inside private overlay
+  validates path
+  executes local private script with configured shell
 ```
 
 ---
@@ -453,13 +728,14 @@ User selects a tool
 Frontend passes tool ID to core
   |
   v
-Core resolves script path from manifest
+Core resolves manifest entry
   |
   v
-Core downloads selected script
+Core checks source
   |
-  v
-Core executes script with configured shell
+  ├── source=public  -> download public script from GitHub raw
+  |
+  └── source=private -> execute local private script
 ```
 
 ---
@@ -493,6 +769,12 @@ sx-ctl run system.info
 Alternative explicit run syntax.
 
 ```sh
+sx-ctl private.weather
+```
+
+Runs a private tool if the private overlay is available.
+
+```sh
 sx-ctl --basic
 ```
 
@@ -516,29 +798,45 @@ sx-ctl version
 
 Shows version information.
 
+Future possible commands:
+
+```sh
+sx-ctl overlay status
+sx-ctl overlay update
+sx-ctl doctor
+```
+
+These are not required for version 1.
+
 ---
 
 ## Data Flow
 
 `sx-ctl` should only download files that are needed for the current operation.
 
-For an interactive call:
+For an interactive public-only call:
 
 ```text
 sx-ctl
 ```
 
-Expected downloads:
+Expected public downloads:
 
 ```text
 sx-ctl.sh
 sx-ctl-basic.sh or sx-ctl-fzf.sh
 lib/core.sh
 manifest.txt
-selected script
+selected public script
 ```
 
-For direct tool execution:
+If the private overlay exists, the private manifest may be read locally:
+
+```text
+~/.config/sx-ctl/overlays/private/manifest.txt
+```
+
+For direct public tool execution:
 
 ```text
 sx-ctl system.info
@@ -554,6 +852,28 @@ manifest.txt
 scripts/system/info.sh
 ```
 
+For private tool execution:
+
+```text
+sx-ctl private.weather
+```
+
+Expected public downloads:
+
+```text
+sx-ctl.sh
+selected frontend
+lib/core.sh
+manifest.txt
+```
+
+Expected local reads:
+
+```text
+~/.config/sx-ctl/overlays/private/manifest.txt
+~/.config/sx-ctl/overlays/private/scripts/personal/weather.sh
+```
+
 The following should not be downloaded:
 
 ```text
@@ -562,6 +882,7 @@ repository history
 other branches
 unselected scripts
 the full repository archive
+private repository contents through public sx-ctl
 ```
 
 ---
@@ -612,12 +933,12 @@ Reason:
 - raw GitHub URLs do not provide easy directory listing
 - scanning a remote repository would require GitHub API usage or cloning
 - the manifest makes available tools explicit
-- metadata such as category, description and risk can be stored centrally
+- metadata such as source, category, description and risk can be stored centrally
 
 Consequence:
 
-- adding a new script requires updating `manifest.txt`
-- the manifest must be kept consistent with the files in `scripts/`
+- adding a new script requires updating a manifest
+- manifests must be kept consistent with the files in `scripts/`
 
 ---
 
@@ -639,7 +960,25 @@ Consequence:
 
 ---
 
-### 5. Keep Frontend and Core Separate
+### 5. Add a `source` Field to the Manifest
+
+The manifest includes a `source` field.
+
+Reason:
+
+- public and private tools need to be handled differently
+- public tools are downloaded from GitHub raw URLs
+- private tools are executed from a local overlay
+- future sources such as `homelab` or `work` may become possible
+
+Consequence:
+
+- the core must route execution based on the source field
+- unsupported source values must produce clear errors
+
+---
+
+### 6. Keep Frontend and Core Separate
 
 Frontend scripts handle user interaction.
 
@@ -658,7 +997,7 @@ Consequence:
 
 ---
 
-### 6. Provide Basic Mode as Compatibility Baseline
+### 7. Provide Basic Mode as Compatibility Baseline
 
 `sx-ctl-basic.sh` is the baseline frontend.
 
@@ -675,7 +1014,44 @@ Consequence:
 
 ---
 
-### 7. Do Not Add a Shared Runtime Library in Version 1
+### 8. Support Optional Private Overlay
+
+`sx-ctl` supports an optional private overlay.
+
+Reason:
+
+- users may want personal scripts and configuration
+- private scripts should not live in the public repository
+- private values such as a city name should not be committed publicly
+- SSH-based private Git repositories can be used to sync the overlay between machines
+
+Consequence:
+
+- public-only usage must work without the overlay
+- the core must check whether the private manifest exists
+- private scripts are executed locally
+- private paths must be validated
+
+---
+
+### 9. Do Not Automatically Load Private Env Files in the Core
+
+The core does not automatically load private env files.
+
+Reason:
+
+- not every script needs private configuration
+- loading env globally may expose private values unnecessarily
+- scripts should explicitly choose which config they need
+
+Consequence:
+
+- scripts that need private configuration must load it themselves
+- this keeps the core simpler and safer
+
+---
+
+### 10. Do Not Add a Shared Runtime Library in Version 1
 
 Tool scripts do not import a shared `sx-ctl` runtime library.
 
@@ -693,7 +1069,7 @@ Consequence:
 
 ---
 
-### 8. Do Not Automatically Install Dependencies in Version 1
+### 11. Do Not Automatically Install Dependencies in Version 1
 
 `sx-ctl` does not automatically install missing dependencies.
 
@@ -712,25 +1088,25 @@ Consequence:
 
 ---
 
-### 9. Download Only Required Files
+### 12. Download Only Required Public Files
 
-`sx-ctl` downloads only the files needed for the current command.
+`sx-ctl` downloads only the public files needed for the current command.
 
 Reason:
 
-- avoids cloning the repository
+- avoids cloning the public repository
 - keeps execution fast
-- ensures users always run the latest remote version
+- ensures users always run the latest remote public version
 
 Consequence:
 
-- each command may require network access
+- each public command may require network access
 - no offline mode is available in version 1
-- GitHub availability affects execution
+- GitHub availability affects public execution
 
 ---
 
-### 10. Execute Scripts as Separate Processes
+### 13. Execute Scripts as Separate Processes
 
 Selected tools are executed as separate shell processes.
 
@@ -756,7 +1132,14 @@ Examples:
 - missing `curl` and `wget`
 - missing `fzf` when `--fzf` is explicitly requested
 - unknown tool ID
+- duplicate tool ID
+- missing public manifest
+- missing private manifest when a private tool is requested
 - missing script path in manifest
+- missing public script
+- missing private script
+- unsafe private script path
+- unsupported source value
 - unsupported shell value
 - missing `bash` for Bash-based scripts
 - network errors while fetching files
@@ -768,18 +1151,27 @@ Example:
 
 ```text
 Error: unknown tool ID: docker.clean
+
 Available tools:
   system.info
   docker.cleanup
+  private.weather
 ```
 
 ---
 
 ## Security Considerations
 
-`sx-ctl` downloads and executes shell scripts from a GitHub repository.
+`sx-ctl` downloads and executes shell scripts.
 
-This means users must trust the repository and its maintainers.
+Public tools are downloaded from the public GitHub repository.
+
+Private tools are executed from the local private overlay if available.
+
+This means users must trust:
+
+- the public `sx-ctl` repository
+- their local private overlay contents
 
 The README should clearly document this behavior.
 
@@ -789,7 +1181,10 @@ Important security rules for the project:
 - Do not run `sudo` automatically from the launcher.
 - Scripts that perform destructive actions should ask for confirmation.
 - Risky scripts should be marked with `medium` or `high` in the manifest.
-- Users should be able to inspect scripts in the repository before running them.
+- Users should be able to inspect scripts in the repository or private overlay before running them.
+- Private paths must be validated before execution.
+- Private env files should not be loaded globally by the core.
+- Real secrets such as tokens or passwords should be handled carefully.
 
 ---
 
@@ -797,14 +1192,17 @@ Important security rules for the project:
 
 Version 1 has the following known limitations:
 
-- requires network access for normal operation
+- requires network access for public operation
 - does not support offline execution
-- does not cache scripts locally
+- does not cache public scripts locally
 - does not verify script checksums
 - does not support automatic dependency installation
-- does not support external script repositories
+- does not support arbitrary external script repositories
 - does not provide rollback to older script versions
-- depends on GitHub raw file availability
+- depends on GitHub raw file availability for public tools
+- supports only one planned private overlay by convention
+- does not manage private Git repositories automatically in the public core
+- does not provide encrypted secret handling
 
 ---
 
@@ -813,6 +1211,7 @@ Version 1 has the following known limitations:
 Possible future improvements:
 
 - local cache mode
+- offline mode
 - checksum verification
 - versioned releases
 - GitHub Actions for shellcheck and tests
@@ -823,6 +1222,14 @@ Possible future improvements:
 - support for aliases
 - support for script arguments in the manifest
 - optional dependency helper functions
-- offline mode for installed tools
-
-These ideas are not part of version 1 but may be useful later.
+- multiple overlays:
+  - `private`
+  - `homelab`
+  - `work`
+- overlay management commands:
+  - `sx-ctl overlay list`
+  - `sx-ctl overlay status`
+  - `sx-ctl overlay update`
+- public admin tools for manifest validation
+- encrypted private configuration support
+- stronger secret management integration
