@@ -88,29 +88,95 @@ sx_basic_load_core() {
 
 sx_basic_usage() {
   cat <<'EOF'
-sx-ctl-basic
+SX-CTL-BASIC(1)            User Commands            SX-CTL-BASIC(1)
 
-Usage:
-  sx-ctl-basic.sh
-  sx-ctl-basic.sh list
-  sx-ctl-basic.sh run <tool-id> [args...]
-  sx-ctl-basic.sh <tool-id> [args...]
-  sx-ctl-basic.sh help
-  sx-ctl-basic.sh version
+NAME
+    sx-ctl-basic - minimal sx-ctl frontend without optional dependencies
 
-Examples:
-  sx-ctl-basic.sh list
-  sx-ctl-basic.sh system.info
-  sx-ctl-basic.sh misc.hello Peppeppa
-  sx-ctl-basic.sh run misc.hello Peppeppa
+SYNOPSIS
+    sx-ctl
+    sx-ctl -ls
+    sx-ctl -la
+    sx-ctl -r <tool-id> [args...]
+    sx-ctl <tool-id> [args...]
+    sx-ctl -h
+    sx-ctl -v
 
-Commands:
-  list       List available tools
-  run        Run a tool by id
-  help       Show this help
-  version    Show version
+DESCRIPTION
+    sx-ctl-basic is the minimal frontend for sx-ctl. It lists available
+    tools, runs tools by ID and provides a simple category-based interactive
+    menu.
 
-Without arguments, sx-ctl-basic starts a category-based interactive menu.
+    It does not require fzf, jq, git, Python or Node.
+
+OPTIONS
+    -ls
+        List available tools as a compact tree grouped by source and category.
+
+    -la
+        List all available tools as a detailed tree with label, risk and description.
+
+    -r <tool-id> [args...]
+        Run a tool by ID and pass optional arguments to the script.
+
+    -h
+        Show this help text.
+
+    -v
+        Show the sx-ctl-basic version.
+
+COMMANDS
+    list, ls
+        Compatibility aliases for -ls.
+
+    listall, la
+        Compatibility aliases for -la.
+
+    run
+        Compatibility alias for -r.
+
+    help, --help
+        Compatibility aliases for -h.
+
+    version, --version
+        Compatibility aliases for -v.
+
+INTERACTIVE MODE
+    When started without arguments, sx-ctl-basic opens a simple menu:
+
+        1. Select a category.
+        2. Select a tool from that category.
+        3. Optionally enter arguments.
+        4. The selected script is executed.
+
+EXAMPLES
+    sx-ctl
+        Start the interactive category-based menu.
+
+    sx-ctl -ls
+        Show only available tool IDs.
+
+    sx-ctl -la
+        Show all tools grouped by source and category.
+
+    sx-ctl system.info
+        Run the tool with ID system.info.
+
+    sx-ctl misc.hello Peppeppa
+        Run misc.hello and pass "Peppeppa" as first argument.
+
+    sx-ctl -r misc.hello Peppeppa
+        Run misc.hello using the explicit run flag.
+
+EXIT STATUS
+    0
+        Command completed successfully.
+
+    non-zero
+        An error occurred, the tool was not found, or the selected script
+        returned a non-zero exit code.
+
+SX-CTL-BASIC(1)            User Commands            SX-CTL-BASIC(1)
 EOF
 }
 
@@ -118,7 +184,96 @@ sx_basic_version() {
   printf '%s\n' "sx-ctl-basic $SX_CTL_VERSION"
 }
 
-sx_basic_print_list() {
+sx_basic_print_list_tree() {
+  list_file=$(sx_basic_make_temp_file) || {
+    sx_basic_err "Could not create temporary file."
+    return 1
+  }
+
+  sx_list >"$list_file"
+
+  if [ ! -s "$list_file" ]; then
+    rm -f "$list_file"
+    sx_basic_err "No tools available."
+    return 1
+  fi
+
+  printf '%s\n' "sx-ctl tools"
+
+  sources=$(cut -d '|' -f 2 "$list_file" | sort -u)
+  source_count=$(printf '%s\n' "$sources" | sed '/^$/d' | wc -l | tr -d ' ')
+
+  source_index=0
+  printf '%s\n' "$sources" | while IFS= read -r source; do
+    [ -n "$source" ] || continue
+
+    source_index=$((source_index + 1))
+
+    if [ "$source_index" -eq "$source_count" ]; then
+      source_prefix="└──"
+      category_indent="    "
+    else
+      source_prefix="├──"
+      category_indent="│   "
+    fi
+
+    printf '%s %s\n' "$source_prefix" "$source"
+
+    categories=$(awk -F '|' -v wanted_source="$source" '
+      $2 == wanted_source {
+        print $3
+      }
+    ' "$list_file" | sort -u)
+
+    category_count=$(printf '%s\n' "$categories" | sed '/^$/d' | wc -l | tr -d ' ')
+
+    category_index=0
+    printf '%s\n' "$categories" | while IFS= read -r category; do
+      [ -n "$category" ] || continue
+
+      category_index=$((category_index + 1))
+
+      if [ "$category_index" -eq "$category_count" ]; then
+        category_prefix="${category_indent}└──"
+        tool_indent="${category_indent}    "
+      else
+        category_prefix="${category_indent}├──"
+        tool_indent="${category_indent}│   "
+      fi
+
+      printf '%s %s\n' "$category_prefix" "$category"
+
+      tools=$(awk -F '|' \
+        -v wanted_source="$source" \
+        -v wanted_category="$category" '
+        $2 == wanted_source && $3 == wanted_category {
+          print $1
+        }
+      ' "$list_file" | sort)
+
+      tool_count=$(printf '%s\n' "$tools" | sed '/^$/d' | wc -l | tr -d ' ')
+
+      tool_index=0
+      printf '%s\n' "$tools" | while IFS= read -r id; do
+        [ -n "$id" ] || continue
+
+        tool_index=$((tool_index + 1))
+
+        if [ "$tool_index" -eq "$tool_count" ]; then
+          tool_prefix="${tool_indent}└──"
+        else
+          tool_prefix="${tool_indent}├──"
+        fi
+
+        printf '%s %s\n' "$tool_prefix" "$id"
+      done
+    done
+  done
+
+  rm -f "$list_file"
+}
+
+sx_basic_print_list_all() {
   list_file=$(sx_basic_make_temp_file) || {
     sx_basic_err "Could not create temporary file."
     return 1
@@ -381,21 +536,24 @@ sx_basic_main() {
   "")
     sx_basic_prompt
     ;;
-  help | --help | -h)
+  -h | --help | help)
     sx_basic_usage
     ;;
-  version | --version | -v)
+  -v | --version | version)
     sx_basic_version
     ;;
-  list | ls)
-    sx_basic_print_list
+  -ls | list | ls)
+    sx_basic_print_list_tree
     ;;
-  run)
+  -la | listall | la)
+    sx_basic_print_list_all
+    ;;
+  -r | run)
     shift
 
     if [ $# -lt 1 ]; then
       sx_basic_err "Missing tool id."
-      sx_basic_err "Usage: sx-ctl-basic.sh run <tool-id> [args...]"
+      sx_basic_err "Usage: sx-ctl -r <tool-id> [args...]"
       return 1
     fi
 
@@ -406,7 +564,7 @@ sx_basic_main() {
     ;;
   -*)
     sx_basic_err "Unknown option: $cmd"
-    sx_basic_err "Run 'sx-ctl-basic.sh help' for usage."
+    sx_basic_err "Run 'sx-ctl -h' for usage."
     return 1
     ;;
   *)

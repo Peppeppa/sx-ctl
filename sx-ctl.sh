@@ -68,34 +68,129 @@ sx_main_script_dir() {
 
 sx_main_usage() {
   cat <<'EOF'
-sx-ctl
+SX-CTL(1)                  User Commands                  SX-CTL(1)
 
-Usage:
-  sx-ctl
-  sx-ctl [--basic] list
-  sx-ctl [--basic] run <tool-id> [args...]
-  sx-ctl [--basic] <tool-id> [args...]
-  sx-ctl --fzf [args...]
-  sx-ctl help
-  sx-ctl version
+NAME
+    sx-ctl - lightweight command runner for repository-hosted shell scripts
 
-Examples:
-  sx-ctl list
-  sx-ctl system.info
-  sx-ctl misc.hello Peppeppa
-  sx-ctl run misc.hello Peppeppa
-  sx-ctl --basic list
-  sx-ctl --fzf
+SYNOPSIS
+    sx-ctl
+    sx-ctl -ls
+    sx-ctl -la
+    sx-ctl -r <tool-id> [args...]
+    sx-ctl <tool-id> [args...]
+    sx-ctl -b [args...]
+    sx-ctl -f [args...]
+    sx-ctl -h
+    sx-ctl -v
 
-Modes:
-  --basic     Use the basic frontend. This is the default.
-  --fzf       Use the fzf frontend. Not implemented yet.
+DESCRIPTION
+    sx-ctl is a lightweight, modular command-line framework for running
+    shell scripts from a GitHub repository without cloning or manually
+    pulling the public repository.
 
-Commands:
-  list        List available tools
-  run         Run a tool by id
-  help        Show this help
-  version     Show version
+    By default, sx-ctl uses the basic frontend. The fzf frontend is planned
+    as an optional enhanced interface.
+
+OPTIONS
+    -ls
+        List available tools as a compact tree grouped by source and category.
+
+    -la
+        List all available tools as a detailed tree with label, risk and description.
+
+    -r <tool-id> [args...]
+        Run a tool by ID and pass optional arguments to the script.
+
+    -b [args...]
+        Use the basic frontend. This is the default mode.
+
+    -f [args...]
+        Use the fzf frontend. This mode is planned but not implemented yet.
+
+    -h
+        Show this help text.
+
+    -v
+        Show the sx-ctl version.
+
+COMMANDS
+    list, ls
+        Compatibility aliases for -ls.
+
+    listall, la
+        Compatibility aliases for -la.
+
+    run
+        Compatibility alias for -r.
+
+    help, --help
+        Compatibility aliases for -h.
+
+    version, --version
+        Compatibility aliases for -v.
+
+    --basic
+        Compatibility alias for -b.
+
+    --fzf
+        Compatibility alias for -f.
+
+EXAMPLES
+    sx-ctl
+        Start the interactive category-based menu.
+
+    sx-ctl -ls
+        Show only available tool IDs.
+
+    sx-ctl -la
+        Show all tools grouped by source and category.
+
+    sx-ctl system.info
+        Run the tool with ID system.info.
+
+    sx-ctl misc.hello Peppeppa
+        Run misc.hello and pass "Peppeppa" as first argument.
+
+    sx-ctl -r misc.hello Peppeppa
+        Run misc.hello using the explicit run flag.
+
+FILES
+    manifest.txt
+        Public tool manifest.
+
+    lib/core.sh
+        Shared core logic.
+
+    sx-ctl-basic.sh
+        Minimal frontend without additional dependencies.
+
+    sx-ctl-fzf.sh
+        Optional fzf frontend, planned for a later phase.
+
+PRIVATE OVERLAY
+    If this file exists, private tools are loaded in addition to public tools:
+
+        ~/.config/sx-ctl/overlays/private/manifest.txt
+
+    Private scripts are executed locally from:
+
+        ~/.config/sx-ctl/overlays/private/
+
+    Private script paths must be relative and must not contain "..".
+
+EXIT STATUS
+    0
+        Command completed successfully.
+
+    non-zero
+        An error occurred, the tool was not found, or the selected script
+        returned a non-zero exit code.
+
+SEE ALSO
+    sh(1), bash(1), curl(1), wget(1), fzf(1)
+
+SX-CTL(1)                  User Commands                  SX-CTL(1)
 EOF
 }
 
