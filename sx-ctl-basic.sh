@@ -119,21 +119,96 @@ sx_basic_version() {
 }
 
 sx_basic_print_list() {
-  printf '%s\n' "Available tools:"
-  printf '%s\n' "----------------"
+  list_file=$(sx_basic_make_temp_file) || {
+    sx_basic_err "Could not create temporary file."
+    return 1
+  }
 
-  sx_list | while IFS='|' read -r id source category label risk description; do
-    [ -n "$id" ] || continue
+  sx_list >"$list_file"
 
-    printf '%s\n' "$id"
-    printf '  Label:       %s\n' "$label"
-    printf '  Source:      %s\n' "$source"
-    printf '  Category:    %s\n' "$category"
-    printf '  Risk:        %s\n' "$risk"
-    printf '  Description: %s\n' "$description"
-    printf '\n'
+  if [ ! -s "$list_file" ]; then
+    rm -f "$list_file"
+    sx_basic_err "No tools available."
+    return 1
+  fi
+
+  printf '%s\n' "sx-ctl tools"
+
+  sources=$(cut -d '|' -f 2 "$list_file" | sort -u)
+
+  source_count=$(printf '%s\n' "$sources" | sed '/^$/d' | wc -l | tr -d ' ')
+
+  source_index=0
+  printf '%s\n' "$sources" | while IFS= read -r source; do
+    [ -n "$source" ] || continue
+
+    source_index=$((source_index + 1))
+
+    if [ "$source_index" -eq "$source_count" ]; then
+      source_prefix="└──"
+      category_indent="    "
+    else
+      source_prefix="├──"
+      category_indent="│   "
+    fi
+
+    printf '%s %s\n' "$source_prefix" "$source"
+
+    categories=$(awk -F '|' -v wanted_source="$source" '
+      $2 == wanted_source {
+        print $3
+      }
+    ' "$list_file" | sort -u)
+
+    category_count=$(printf '%s\n' "$categories" | sed '/^$/d' | wc -l | tr -d ' ')
+
+    category_index=0
+    printf '%s\n' "$categories" | while IFS= read -r category; do
+      [ -n "$category" ] || continue
+
+      category_index=$((category_index + 1))
+
+      if [ "$category_index" -eq "$category_count" ]; then
+        category_prefix="${category_indent}└──"
+        tool_indent="${category_indent}    "
+      else
+        category_prefix="${category_indent}├──"
+        tool_indent="${category_indent}│   "
+      fi
+
+      printf '%s %s\n' "$category_prefix" "$category"
+
+      tools=$(awk -F '|' \
+        -v wanted_source="$source" \
+        -v wanted_category="$category" '
+        $2 == wanted_source && $3 == wanted_category {
+          print $1 "|" $4 "|" $5 "|" $6
+        }
+      ' "$list_file")
+
+      tool_count=$(printf '%s\n' "$tools" | sed '/^$/d' | wc -l | tr -d ' ')
+
+      tool_index=0
+      printf '%s\n' "$tools" | while IFS='|' read -r id label risk description; do
+        [ -n "$id" ] || continue
+
+        tool_index=$((tool_index + 1))
+
+        if [ "$tool_index" -eq "$tool_count" ]; then
+          tool_prefix="${tool_indent}└──"
+        else
+          tool_prefix="${tool_indent}├──"
+        fi
+
+        printf '%s %s - %s [%s]\n' "$tool_prefix" "$id" "$label" "$risk"
+        printf '%s    %s\n' "$tool_indent" "$description"
+      done
+    done
   done
+
+  rm -f "$list_file"
 }
+
 sx_basic_prompt() {
   categories_file=$(sx_basic_make_temp_file) || {
     sx_basic_err "Could not create temporary file."
