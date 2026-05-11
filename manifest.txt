@@ -1,0 +1,3 @@
+id|source|category|label|path|description|shell|deps|risk
+system.info|public|system|Systeminformationen|scripts/system/info.sh|Zeigt grundlegende Systeminformationen an|sh|uname,df|low
+misc.hello|public|misc|Hello Demo|scripts/misc/hello.sh|Ein simples Bash-Testscript|bash|bash|low

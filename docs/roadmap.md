@@ -21,22 +21,22 @@ Goal: Create the initial public project structure and keep the project understan
 
 Goal: Define the public script registry and add the first runnable scripts.
 
-- [ ] Create `manifest.txt`
-- [ ] Use this manifest format:
+- [x] Create `manifest.txt`
+- [x] Use this manifest format:
 
 ```text
 id|source|category|label|path|description|shell|deps|risk
 ```
 
-- [ ] Add first public manifest entries:
-  - [ ] `system.info`
-  - [ ] `misc.hello`
-- [ ] Create `scripts/system/info.sh`
-- [ ] Create `scripts/misc/hello.sh`
-- [ ] Ensure example scripts run with the shell defined in the manifest
-- [ ] Add clear script headers to the example scripts
-- [ ] Check that no manifest field contains the pipe character `|`
-- [ ] Document the manifest fields in `README.md`
+- [x] Add first public manifest entries:
+  - [x] `system.info`
+  - [x] `misc.hello`
+- [x] Create `scripts/system/info.sh`
+- [x] Create `scripts/misc/hello.sh`
+- [x] Ensure example scripts run with the shell defined in the manifest
+- [x] Add clear script headers to the example scripts
+- [x] Check that no manifest field contains the pipe character `|`
+- [x] Document the manifest fields in `README.md`
 
 ---
 
