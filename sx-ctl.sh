@@ -83,6 +83,7 @@ SYNOPSIS
     sx-ctl -f [args...]
     sx-ctl -h
     sx-ctl -v
+    sx-ctl private <command> [args...]
 
 DESCRIPTION
     sx-ctl is a lightweight, modular command-line framework for running
@@ -136,6 +137,9 @@ COMMANDS
     --fzf
         Compatibility alias for -f.
 
+    private
+        Manage the optional private overlay.
+
 EXAMPLES
     sx-ctl
         Start the interactive category-based menu.
@@ -154,6 +158,12 @@ EXAMPLES
 
     sx-ctl -r misc.hello Peppeppa
         Run misc.hello using the explicit run flag.
+
+    sx-ctl private status
+        Show private overlay status.
+
+    sx-ctl private clone git@github.com:Peppeppa/sx-ctl-private.git
+        Clone and initialize the private overlay.
 
 FILES
     manifest.txt
@@ -255,23 +265,71 @@ sx_main_load_frontend() {
   return "$status"
 }
 
+sx_main_load_private_helper() {
+  helper_file="lib/private.sh"
+
+  # 1. Prefer explicitly configured local root.
+  if [ -n "${SX_LOCAL_ROOT:-}" ] && [ -f "$SX_LOCAL_ROOT/$helper_file" ]; then
+    # shellcheck disable=SC1090
+    . "$SX_LOCAL_ROOT/$helper_file"
+    return $?
+  fi
+
+  # 2. Prefer helper next to this script in a local checkout.
+  script_dir=$(sx_main_script_dir)
+
+  if [ -f "$script_dir/$helper_file" ]; then
+    SX_LOCAL_ROOT="${SX_LOCAL_ROOT:-$script_dir}"
+    export SX_LOCAL_ROOT
+
+    # shellcheck disable=SC1090
+    . "$script_dir/$helper_file"
+    return $?
+  fi
+
+  # 3. Fallback: fetch helper from public raw GitHub repo.
+  tmp_helper=$(sx_main_make_temp_file) || {
+    sx_main_err "Could not create temporary file."
+    return 1
+  }
+
+  if ! sx_main_fetch_url "$SX_RAW_BASE/$helper_file" >"$tmp_helper"; then
+    rm -f "$tmp_helper"
+    sx_main_err "Could not load helper: $helper_file"
+    return 1
+  fi
+
+  # shellcheck disable=SC1090
+  . "$tmp_helper"
+  status=$?
+
+  rm -f "$tmp_helper"
+
+  return "$status"
+}
+
 sx_main_parse_and_run() {
   frontend="basic"
 
   case "${1:-}" in
-  help | --help | -h)
+  -h | --help | help)
     sx_main_usage
     return 0
     ;;
-  version | --version | -v)
+  -v | --version | version)
     sx_main_version
     return 0
     ;;
-  --basic)
+  private)
+    shift
+    sx_main_load_private_helper "$@"
+    return $?
+    ;;
+  -b | --basic)
     frontend="basic"
     shift
     ;;
-  --fzf)
+  -f | --fzf)
     frontend="fzf"
     shift
     ;;
@@ -279,7 +337,7 @@ sx_main_parse_and_run() {
 
   if [ "$frontend" = "fzf" ]; then
     sx_main_err "The fzf frontend is not implemented yet."
-    sx_main_err "Use '--basic' or omit the mode option for now."
+    sx_main_err "Use '-b' or omit the mode option for now."
     return 1
   fi
 
