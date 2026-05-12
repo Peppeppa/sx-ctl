@@ -2,3 +2,9 @@ id|source|category|label|path|description|shell|deps|risk
 system.info|public|system|Systeminformationen|scripts/system/info.sh|Zeigt grundlegende Systeminformationen an|sh|uname,df|low
 misc.hello|public|misc|Hello Demo|scripts/misc/hello.sh|Ein simples Bash-Testscript|bash|bash|low
 test.test|public|test|Test Script|scripts/test/test.sh|Ein einfaches Testscript|sh|sh|low
+admin.private-status|public|admin|Private Overlay Status|scripts/admin/private-status.sh|Zeigt Status des privaten Overlays an|sh|sh,git|low
+admin.private-init|public|admin|Private Overlay initialisieren|scripts/admin/private-init.sh|Erstellt ein lokales privates Overlay mit Beispielstruktur|sh|sh|medium
+admin.private-clone|public|admin|Private Overlay klonen|scripts/admin/private-clone.sh|Klont ein bestehendes privates Git-Repo als Overlay|sh|sh,git|medium
+admin.private-pull|public|admin|Private Overlay aktualisieren|scripts/admin/private-pull.sh|Führt git pull --ff-only im privaten Overlay aus|sh|sh,git|medium
+admin.private-remove|public|admin|Private Overlay entfernen|scripts/admin/private-remove.sh|Entfernt das lokale private Overlay nach Bestätigung|sh|sh|high
+admin.validate-manifest|public|admin|Manifest prüfen|scripts/admin/validate-manifest.sh|Prüft Public und Private Manifest auf Strukturfehler|sh|sh,awk|low
