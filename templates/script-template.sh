@@ -17,7 +17,7 @@ set -eu
 main() {
 
   # Write your script code here.
-  # echo "Hello from category.name"
+  echo "Hello from category.name"
 
 }
 
