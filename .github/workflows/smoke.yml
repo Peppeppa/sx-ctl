@@ -1,0 +1,38 @@
+name: Smoke Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Run smoke tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show shell versions
+        run: |
+          sh --version || true
+          bash --version || true
+
+      - name: Ensure scripts are executable
+        run: |
+          chmod +x sx-ctl.sh
+          chmod +x sx-ctl-basic.sh
+          chmod +x install.sh
+          chmod +x uninstall.sh
+          chmod +x tests/smoke.sh
+          find scripts -type f -name '*.sh' -exec chmod +x {} \;
+          find templates -type f -name '*.sh' -exec chmod +x {} \;
+
+      - name: Run smoke tests
+        run: |
+          sh tests/smoke.sh
