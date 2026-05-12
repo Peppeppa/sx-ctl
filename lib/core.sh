@@ -154,6 +154,8 @@ sx_validate_manifest_entry() {
   deps=$8
   risk=$9
 
+  : "$deps"
+
   [ -n "$id" ] || sx_die "Manifest entry has empty id: $entry" || return 1
   [ -n "$source" ] || sx_die "Manifest entry has empty source: $entry" || return 1
   [ -n "$category" ] || sx_die "Manifest entry has empty category: $entry" || return 1
@@ -210,7 +212,7 @@ sx_validate_manifest_entry() {
     sx_die "Script path for tool '$id' must be relative."
     return 1
     ;;
-  *../* | ../* | *'/..')
+  *..*)
     sx_die "Script path for tool '$id' must not contain '..'."
     return 1
     ;;
@@ -297,17 +299,26 @@ sx_check_duplicate_ids() {
     return 1
   }
 
-  sx_manifest_all | while IFS= read -r entry || [ -n "$entry" ]; do
+  validation_status=0
+
+  while IFS= read -r entry || [ -n "$entry" ]; do
     [ -z "$entry" ] && continue
     sx_is_header "$entry" && continue
 
     if ! sx_validate_manifest_entry "$entry"; then
-      rm -f "$ids_file"
-      return 1
+      validation_status=1
+      break
     fi
 
-    sx_entry_id "$entry"
-  done >"$ids_file"
+    sx_entry_id "$entry" >>"$ids_file"
+  done <<EOF_MANIFEST_ALL
+$(sx_manifest_all)
+EOF_MANIFEST_ALL
+
+  if [ "$validation_status" -ne 0 ]; then
+    rm -f "$ids_file"
+    return 1
+  fi
 
   duplicates=$(sort "$ids_file" | uniq -d)
 
@@ -409,7 +420,7 @@ sx_run_private() {
     sx_die "Private script path must be relative: $path"
     return 1
     ;;
-  *../* | ../* | *'/..')
+  *..*)
     sx_die "Private script path must not contain '..': $path"
     return 1
     ;;
