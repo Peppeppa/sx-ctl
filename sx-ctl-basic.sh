@@ -527,6 +527,38 @@ sx_basic_prompt() {
 
 }
 
+sx_basic_run_tool() {
+  tool_id=$1
+  shift
+
+  # If arguments were provided directly, pass them through unchanged.
+  if [ $# -gt 0 ]; then
+    sx_run "$tool_id" "$@"
+    return $?
+  fi
+
+  # Only ask interactively when stdin is a terminal.
+  # This avoids blocking scripts, pipes or automation.
+  if [ -t 0 ]; then
+    printf '%s' "Argumente optional eingeben, sonst Enter: "
+    IFS= read -r tool_args || tool_args=""
+
+    if [ -n "$tool_args" ]; then
+      printf '\n'
+      # Simple whitespace-based argument splitting.
+      # For complex quoting, use direct CLI mode:
+      #   sx-ctl <tool-id> "argument with spaces"
+      # shellcheck disable=SC2086
+      sx_run "$tool_id" $tool_args
+      return $?
+    fi
+
+    printf '\n'
+  fi
+
+  sx_run "$tool_id"
+}
+
 sx_basic_main() {
   sx_basic_load_core || return 1
 
@@ -560,7 +592,7 @@ sx_basic_main() {
     tool_id=$1
     shift
 
-    sx_run "$tool_id" "$@"
+    sx_basic_run_tool "$tool_id" "$@"
     ;;
   -*)
     sx_basic_err "Unknown option: $cmd"
@@ -570,7 +602,7 @@ sx_basic_main() {
   *)
     tool_id=$1
     shift
-    sx_run "$tool_id" "$@"
+    sx_basic_run_tool "$tool_id" "$@"
     ;;
   esac
 }
