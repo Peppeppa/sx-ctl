@@ -265,47 +265,65 @@ sx_main_load_frontend() {
   return "$status"
 }
 
-sx_main_load_private_helper() {
-  helper_file="lib/private.sh"
+sx_main_run_private_alias() {
+  private_cmd=${1:-}
 
-  # 1. Prefer explicitly configured local root.
-  if [ -n "${SX_LOCAL_ROOT:-}" ] && [ -f "$SX_LOCAL_ROOT/$helper_file" ]; then
-    # shellcheck disable=SC1090
-    . "$SX_LOCAL_ROOT/$helper_file"
-    return $?
-  fi
+  case "$private_cmd" in
+  "" | -h | --help | help)
+    cat <<'EOF'
+SX-CTL-PRIVATE(1)          User Commands          SX-CTL-PRIVATE(1)
 
-  # 2. Prefer helper next to this script in a local checkout.
-  script_dir=$(sx_main_script_dir)
+NAME
+    sx-ctl private - compatibility aliases for private overlay admin tools
 
-  if [ -f "$script_dir/$helper_file" ]; then
-    SX_LOCAL_ROOT="${SX_LOCAL_ROOT:-$script_dir}"
-    export SX_LOCAL_ROOT
+SYNOPSIS
+    sx-ctl private status
+    sx-ctl private init
+    sx-ctl private init-local
+    sx-ctl private clone <git-url>
+    sx-ctl private pull
+    sx-ctl private remove
 
-    # shellcheck disable=SC1090
-    . "$script_dir/$helper_file"
-    return $?
-  fi
+DESCRIPTION
+    These commands are compatibility aliases.
 
-  # 3. Fallback: fetch helper from public raw GitHub repo.
-  tmp_helper=$(sx_main_make_temp_file) || {
-    sx_main_err "Could not create temporary file."
+    The canonical commands are:
+
+        sx-ctl admin.private-status
+        sx-ctl admin.private-init
+        sx-ctl admin.private-clone <git-url>
+        sx-ctl admin.private-pull
+        sx-ctl admin.private-remove
+
+EOF
+    return 0
+    ;;
+  status)
+    shift
+    sx_main_load_frontend "basic" admin.private-status "$@"
+    ;;
+  init | init-local)
+    shift
+    sx_main_load_frontend "basic" admin.private-init "$@"
+    ;;
+  clone)
+    shift
+    sx_main_load_frontend "basic" admin.private-clone "$@"
+    ;;
+  pull)
+    shift
+    sx_main_load_frontend "basic" admin.private-pull "$@"
+    ;;
+  remove)
+    shift
+    sx_main_load_frontend "basic" admin.private-remove "$@"
+    ;;
+  *)
+    sx_main_err "Unknown private command: $private_cmd"
+    sx_main_err "Run: sx-ctl private -h"
     return 1
-  }
-
-  if ! sx_main_fetch_url "$SX_RAW_BASE/$helper_file" >"$tmp_helper"; then
-    rm -f "$tmp_helper"
-    sx_main_err "Could not load helper: $helper_file"
-    return 1
-  fi
-
-  # shellcheck disable=SC1090
-  . "$tmp_helper"
-  status=$?
-
-  rm -f "$tmp_helper"
-
-  return "$status"
+    ;;
+  esac
 }
 
 sx_main_parse_and_run() {
@@ -322,7 +340,7 @@ sx_main_parse_and_run() {
     ;;
   private)
     shift
-    sx_main_load_private_helper "$@"
+    sx_main_run_private_alias "$@"
     return $?
     ;;
   -b | --basic)
