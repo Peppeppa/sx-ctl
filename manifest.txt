@@ -10,5 +10,9 @@ admin.private-remove|public|admin|Private Overlay entfernen|scripts/admin/privat
 admin.validate-manifest|public|admin|Manifest prüfen|scripts/admin/validate-manifest.sh|Prüft Public und Private Manifest auf Strukturfehler|sh|sh,awk|low
 admin.doctor|public|admin|Doctor Check|scripts/admin/doctor.sh|Prüft sx-ctl Setup, Dependencies und Overlay-Status|sh|sh,awk|low
 admin.create-private-script|public|admin|Private Script erstellen|scripts/admin/create-private-script.sh|Erstellt ein neues Private Script aus dem Template, öffnet es in Neovim und ergänzt das Manifest|sh|sh,cp,chmod,find,awk,sed,tr,nvim|medium
-admin.add-public-script|public|admin|Public Script hinzufügen|scripts/admin/add-public-script.sh|Kopiert ein bestehendes Script ins Public Repo und ergänzt das Manifest|sh|sh,cp,chmod,find,awk,sed,tr|medium
 admin.add-private-script|public|admin|Private Script hinzufügen|scripts/admin/add-private-script.sh|Kopiert ein bestehendes Script ins Private Overlay und ergänzt das private Manifest|sh|sh,cp,chmod,find,awk,sed,tr|medium
+sxdev.add-public-script|public|sxdev|Public Script hinzufügen|scripts/sxdev/add-public-script.sh|Kopiert ein bestehendes Script ins Public Repo und ergänzt das Manifest|sh|sh,cp,chmod,find,awk,sed,tr|medium
+sxdev.move-public-script|public|sxdev|Public Script verschieben|scripts/sxdev/move-public-script.sh|Verschiebt ein Public Script und aktualisiert das Manifest|sh|sh,mv,find,awk|medium
+sxdev.delete-public-script|public|sxdev|Public Script löschen|scripts/sxdev/delete-public-script.sh|Löscht ein Public Script und entfernt den Manifest-Eintrag|sh|sh,rm,awk|medium
+admin.move-private-script|public|admin|Private Script verschieben|scripts/admin/move-private-script.sh|Verschiebt ein Private Script und aktualisiert das private Manifest|sh|sh,mv,find,awk|medium
+admin.delete-private-script|public|admin|Private Script löschen|scripts/admin/delete-private-script.sh|Löscht ein Private Script und entfernt den Manifest-Eintrag|sh|sh,rm,awk|medium
