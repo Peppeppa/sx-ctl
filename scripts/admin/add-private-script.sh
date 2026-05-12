@@ -1,0 +1,290 @@
+#!/usr/bin/env sh
+set -eu
+
+# ============================================================
+# sx-ctl public admin script
+# ID:          admin.add-private-script
+# Name:        Private Script hinzufügen
+# Description: Kopiert ein bestehendes Script ins Private Overlay und ergänzt das private Manifest
+# Dependencies: sh, cp, chmod, find, awk
+# Risk:        medium
+# ============================================================
+
+PRIVATE_ROOT="${SX_PRIVATE_ROOT:-$HOME/.config/sx-ctl/overlays/private}"
+PRIVATE_SCRIPTS_DIR="$PRIVATE_ROOT/scripts"
+PRIVATE_MANIFEST="$PRIVATE_ROOT/manifest.txt"
+
+err() {
+  printf '%s\n' "admin.add-private-script: $*" >&2
+}
+
+die() {
+  err "$@"
+  exit 1
+}
+
+have_cmd() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+need_cmd() {
+  cmd=$1
+  have_cmd "$cmd" || die "Required command not found: $cmd"
+}
+
+make_temp_file() {
+  if have_cmd mktemp; then
+    mktemp "${TMPDIR:-/tmp}/sx-ctl-add-private.XXXXXX"
+    return $?
+  fi
+
+  tmp="${TMPDIR:-/tmp}/sx-ctl-add-private.$$"
+  : >"$tmp" || return 1
+  printf '%s\n' "$tmp"
+}
+
+validate_no_pipe() {
+  value=$1
+  field=$2
+
+  case "$value" in
+  *'|'*)
+    die "$field must not contain pipe character '|'."
+    ;;
+  esac
+}
+
+validate_id() {
+  id=$1
+
+  case "$id" in
+  private.*)
+    ;;
+  *)
+    die "Private tool id must start with 'private.': $id"
+    ;;
+  esac
+
+  case "$id" in
+  *'|'* | "")
+    die "Invalid tool id: $id"
+    ;;
+  esac
+}
+
+manifest_has_id() {
+  id=$1
+
+  [ -f "$PRIVATE_MANIFEST" ] || return 1
+
+  awk -F '|' -v wanted="$id" 'NR > 1 && $1 == wanted { found = 1 } END { exit(found ? 0 : 1) }' "$PRIVATE_MANIFEST"
+}
+
+ensure_private_manifest() {
+  mkdir -p "$PRIVATE_ROOT"
+  mkdir -p "$PRIVATE_SCRIPTS_DIR"
+
+  if [ ! -f "$PRIVATE_MANIFEST" ]; then
+    cat >"$PRIVATE_MANIFEST" <<'EOF'
+id|source|category|label|path|description|shell|deps|risk
+EOF
+  fi
+}
+
+choose_category() {
+  categories_file=$(make_temp_file) || die "Could not create temporary file."
+
+  find "$PRIVATE_SCRIPTS_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null |
+    while IFS= read -r dir; do
+      basename "$dir"
+    done |
+    sort >"$categories_file"
+
+  echo "Wähle eine private Kategorie:"
+  echo
+
+  count=0
+  while IFS= read -r category; do
+    count=$((count + 1))
+    printf '  %s) %s\n' "$count" "$category"
+  done <"$categories_file"
+
+  count=$((count + 1))
+  printf '  %s) %s\n' "$count" "Neue Kategorie erstellen"
+
+  echo
+  printf '%s' "Auswahl: "
+  IFS= read -r choice
+
+  case "$choice" in
+  *[!0-9]* | "")
+    rm -f "$categories_file"
+    die "Invalid category selection."
+    ;;
+  esac
+
+  selected=""
+  current=0
+
+  while IFS= read -r category; do
+    current=$((current + 1))
+
+    if [ "$current" -eq "$choice" ] 2>/dev/null; then
+      selected=$category
+      break
+    fi
+  done <"$categories_file"
+
+  rm -f "$categories_file"
+
+  if [ -n "$selected" ]; then
+    printf '%s\n' "$selected"
+    return 0
+  fi
+
+  if [ "$choice" -eq "$count" ] 2>/dev/null; then
+    printf '%s' "Neue Kategorie: "
+    IFS= read -r new_category
+
+    [ -n "$new_category" ] || die "Category must not be empty."
+    validate_no_pipe "$new_category" "category"
+
+    case "$new_category" in
+    */* | *..* | .*)
+      die "Invalid category name: $new_category"
+      ;;
+    esac
+
+    mkdir -p "$PRIVATE_SCRIPTS_DIR/$new_category"
+    printf '%s\n' "$new_category"
+    return 0
+  fi
+
+  die "Category selection out of range."
+}
+
+prompt_default() {
+  prompt=$1
+  default=$2
+
+  if [ -n "$default" ]; then
+    printf '%s [%s]: ' "$prompt" "$default"
+  else
+    printf '%s: ' "$prompt"
+  fi
+
+  IFS= read -r value
+
+  if [ -z "$value" ]; then
+    value=$default
+  fi
+
+  printf '%s\n' "$value"
+}
+
+main() {
+  need_cmd cp
+  need_cmd chmod
+  need_cmd find
+  need_cmd awk
+
+  source_file=${1:-}
+
+  if [ -z "$source_file" ]; then
+    printf '%s' "Pfad zur Script-Datei: "
+    IFS= read -r source_file
+  fi
+
+  [ -n "$source_file" ] || die "Missing script file."
+  [ -f "$source_file" ] || die "Script file not found: $source_file"
+
+  ensure_private_manifest
+
+  category=$(choose_category)
+
+  default_file_name=$(basename "$source_file")
+  file_name=$(prompt_default "Dateiname im Zielordner" "$default_file_name")
+  [ -n "$file_name" ] || die "File name must not be empty."
+
+  case "$file_name" in
+  */* | *..*)
+    die "Invalid file name: $file_name"
+    ;;
+  esac
+
+  dest_dir="$PRIVATE_SCRIPTS_DIR/$category"
+  dest_path="$dest_dir/$file_name"
+  manifest_path="scripts/$category/$file_name"
+
+  if [ -e "$dest_path" ]; then
+    die "Destination already exists: $dest_path"
+  fi
+
+  base_name=${file_name%.*}
+  default_id="private.$category.$base_name"
+
+  tool_id=$(prompt_default "Tool-ID" "$default_id")
+  validate_id "$tool_id"
+
+  if manifest_has_id "$tool_id"; then
+    die "Tool-ID already exists in private manifest: $tool_id"
+  fi
+
+  label=$(prompt_default "Label" "$base_name")
+  description=$(prompt_default "Beschreibung" "TODO")
+  shell_name=$(prompt_default "Shell sh/bash" "sh")
+  deps=$(prompt_default "Dependencies" "$shell_name")
+  risk=$(prompt_default "Risk low/medium/high" "low")
+
+  validate_no_pipe "$tool_id" "id"
+  validate_no_pipe "$category" "category"
+  validate_no_pipe "$label" "label"
+  validate_no_pipe "$manifest_path" "path"
+  validate_no_pipe "$description" "description"
+  validate_no_pipe "$shell_name" "shell"
+  validate_no_pipe "$deps" "deps"
+  validate_no_pipe "$risk" "risk"
+
+  case "$shell_name" in
+  sh | bash)
+    ;;
+  *)
+    die "Shell must be 'sh' or 'bash'."
+    ;;
+  esac
+
+  case "$risk" in
+  low | medium | high)
+    ;;
+  *)
+    die "Risk must be 'low', 'medium' or 'high'."
+    ;;
+  esac
+
+  mkdir -p "$dest_dir"
+  cp "$source_file" "$dest_path"
+  chmod +x "$dest_path"
+
+  printf '%s|private|%s|%s|%s|%s|%s|%s|%s\n' \
+    "$tool_id" \
+    "$category" \
+    "$label" \
+    "$manifest_path" \
+    "$description" \
+    "$shell_name" \
+    "$deps" \
+    "$risk" >>"$PRIVATE_MANIFEST"
+
+  echo
+  echo "Private script added:"
+  echo "  $dest_path"
+  echo
+  echo "Manifest entry:"
+  echo "  $tool_id|private|$category|$label|$manifest_path|$description|$shell_name|$deps|$risk"
+  echo
+  echo "Next checks:"
+  echo "  sx-ctl admin.validate-manifest"
+  echo "  sx-ctl -la"
+}
+
+main "$@"

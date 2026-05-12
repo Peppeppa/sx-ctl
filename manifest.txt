@@ -9,3 +9,6 @@ admin.private-pull|public|admin|Private Overlay aktualisieren|scripts/admin/priv
 admin.private-remove|public|admin|Private Overlay entfernen|scripts/admin/private-remove.sh|Entfernt das lokale private Overlay nach Bestätigung|sh|sh|high
 admin.validate-manifest|public|admin|Manifest prüfen|scripts/admin/validate-manifest.sh|Prüft Public und Private Manifest auf Strukturfehler|sh|sh,awk|low
 admin.doctor|public|admin|Doctor Check|scripts/admin/doctor.sh|Prüft sx-ctl Setup, Dependencies und Overlay-Status|sh|sh,awk|low
+admin.add-public-script|public|admin|Public Script hinzufügen|scripts/admin/add-public-script.sh|Kopiert ein bestehendes Script ins Public Repo und ergänzt das Manifest|sh|sh,cp,chmod,find,awk|medium
+admin.add-private-script|public|admin|Private Script hinzufügen|scripts/admin/add-private-script.sh|Kopiert ein bestehendes Script ins Private Overlay und ergänzt das private Manifest|sh|sh,cp,chmod,find,awk|medium
+admin.create-private-script|public|admin|Private Script erstellen|scripts/admin/create-private-script.sh|Erstellt ein neues Private Script aus dem Template und öffnet es in Neovim|sh|sh,cp,chmod,find,nvim|medium
