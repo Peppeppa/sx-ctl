@@ -1,4 +1,4 @@
-name: Smoke Tests
+name: Quality Checks
 
 on:
   push:
@@ -10,18 +10,18 @@ on:
   workflow_dispatch:
 
 jobs:
-  smoke:
-    name: Run smoke tests
+  checks:
+    name: Run quality checks
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Show shell versions
+      - name: Install ShellCheck
         run: |
-          sh --version || true
-          bash --version || true
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
 
       - name: Ensure scripts are executable
         run: |
@@ -29,10 +29,10 @@ jobs:
           chmod +x sx-ctl-basic.sh
           chmod +x install.sh
           chmod +x uninstall.sh
-          chmod +x tests/smoke.sh
+          chmod +x tests/*.sh
           find scripts -type f -name '*.sh' -exec chmod +x {} \;
           find templates -type f -name '*.sh' -exec chmod +x {} \;
 
-      - name: Run smoke tests
+      - name: Run quality checks
         run: |
-          sh tests/smoke.sh
+          sh tests/check.sh
