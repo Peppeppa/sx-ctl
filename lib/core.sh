@@ -172,6 +172,21 @@ sx_validate_manifest_entry() {
     ;;
   esac
 
+  case "$source:$id" in
+  private:private.*)
+    ;;
+  private:*)
+    sx_die "Private tool id '$id' must start with 'private.'."
+    return 1
+    ;;
+  public:private.*)
+    sx_die "Public tool id '$id' must not start with 'private.'."
+    return 1
+    ;;
+  public:*)
+    ;;
+  esac
+
   case "$shell_name" in
   sh | bash)
     ;;
@@ -249,6 +264,8 @@ sx_entry_risk() {
 }
 
 sx_list() {
+  sx_check_duplicate_ids || return 1
+
   sx_manifest_all | while IFS= read -r entry || [ -n "$entry" ]; do
     [ -z "$entry" ] && continue
     sx_is_header "$entry" && continue
@@ -274,7 +291,45 @@ sx_list() {
   done
 }
 
+sx_check_duplicate_ids() {
+  ids_file=$(sx_make_temp_file) || {
+    sx_err "Could not create temporary file."
+    return 1
+  }
+
+  sx_manifest_all | while IFS= read -r entry || [ -n "$entry" ]; do
+    [ -z "$entry" ] && continue
+    sx_is_header "$entry" && continue
+
+    if ! sx_validate_manifest_entry "$entry"; then
+      rm -f "$ids_file"
+      return 1
+    fi
+
+    sx_entry_id "$entry"
+  done >"$ids_file"
+
+  duplicates=$(sort "$ids_file" | uniq -d)
+
+  rm -f "$ids_file"
+
+  if [ -n "$duplicates" ]; then
+    sx_err "Duplicate tool IDs found:"
+    printf '%s\n' "$duplicates" | while IFS= read -r duplicate_id; do
+      [ -n "$duplicate_id" ] || continue
+      sx_err "  $duplicate_id"
+    done
+    sx_err "Tool IDs must be globally unique."
+    sx_err "Use a namespace such as 'private.admin.help' for private tools."
+    return 1
+  fi
+
+  return 0
+}
+
 sx_find_entry() {
+  sx_check_duplicate_ids || return 1
+
   wanted_id=$1
 
   sx_manifest_all | while IFS= read -r entry || [ -n "$entry" ]; do
