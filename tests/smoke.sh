@@ -10,7 +10,7 @@ set -eu
 #   sh tests/smoke.sh
 # ============================================================
 
-ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ROOT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 SX_CTL="$ROOT_DIR/sx-ctl.sh"
 
 TMP_PRIVATE_ROOT="$ROOT_DIR/.tmp-smoke-private"
@@ -89,7 +89,8 @@ syntax_checks() {
 
   for file in "$ROOT_DIR"/scripts/*/*.sh; do
     [ -f "$file" ] || continue
-    run_test "syntax ${file#$ROOT_DIR/}" sh -n "$file" || true
+    relative_file=${file#"$ROOT_DIR"/}
+    run_test "syntax $relative_file" sh -n "$file" || true
   done
 
   if [ -f "$ROOT_DIR/templates/script-template.sh" ]; then

@@ -97,7 +97,7 @@ validate_path() {
     add_error "$manifest_name:$line_no: tool '$tool_id' path must be relative: $path"
     return 1
     ;;
-  *../* | ../* | *'/..')
+  *..*)
     add_error "$manifest_name:$line_no: tool '$tool_id' path must not contain '..': $path"
     return 1
     ;;

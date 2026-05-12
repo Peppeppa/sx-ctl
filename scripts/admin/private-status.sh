@@ -113,8 +113,6 @@ main() {
 
   echo "Registered private tools:"
   if [ -f "$PRIVATE_ROOT/manifest.txt" ]; then
-    found=0
-
     awk -F '|' '
       NR > 1 && $2 == "private" {
         printf "  %s (%s)\n", $1, $3

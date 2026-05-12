@@ -65,8 +65,7 @@ sx_basic_script_dir() {
 sx_basic_load_core() {
   # 1. Prefer explicitly configured local root.
   if [ -n "${SX_LOCAL_ROOT:-}" ] && [ -f "$SX_LOCAL_ROOT/lib/core.sh" ]; then
-    # shellcheck source=lib/core.sh
-
+    # shellcheck disable=SC1091
     . "$SX_LOCAL_ROOT/lib/core.sh"
     return 0
   fi
@@ -77,8 +76,7 @@ sx_basic_load_core() {
   if [ -f "$script_dir/lib/core.sh" ]; then
     SX_LOCAL_ROOT="${SX_LOCAL_ROOT:-$script_dir}"
     export SX_LOCAL_ROOT
-    # shellcheck source=lib/core.sh
-
+    # shellcheck disable=SC1091
     . "$script_dir/lib/core.sh"
     return 0
   fi
