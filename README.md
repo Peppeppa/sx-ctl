@@ -683,4 +683,4 @@ Planned:
 
 ## License
 
-Add a license before publishing this project for wider use.
+This project is licensed under the MIT License.
