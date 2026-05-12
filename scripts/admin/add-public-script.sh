@@ -6,7 +6,7 @@ set -eu
 # ID:          admin.add-public-script
 # Name:        Public Script hinzufügen
 # Description: Kopiert ein bestehendes Script ins Public Repo und ergänzt das Manifest
-# Dependencies: sh, cp, chmod, find, awk
+# Dependencies: sh, cp, chmod, find, awk, sed, tr
 # Risk:        medium
 # ============================================================
 
@@ -72,7 +72,67 @@ manifest_has_id() {
 
   [ -f "$PUBLIC_MANIFEST" ] || return 1
 
-  awk -F '|' -v wanted="$id" 'NR > 1 && $1 == wanted { found = 1 } END { exit(found ? 0 : 1) }' "$PUBLIC_MANIFEST"
+  awk -F '|' -v wanted="$id" '
+    NR > 1 && $1 == wanted {
+      found = 1
+    }
+    END {
+      exit(found ? 0 : 1)
+    }
+  ' "$PUBLIC_MANIFEST"
+}
+
+get_header_value() {
+  key=$1
+  file=$2
+
+  awk -v key="$key" '
+    BEGIN {
+      pattern = "^# " key ":[[:space:]]*"
+    }
+    $0 ~ pattern {
+      sub(pattern, "", $0)
+      print $0
+      exit
+    }
+  ' "$file"
+}
+
+detect_shell() {
+  file=$1
+  first_line=$(sed -n '1p' "$file")
+
+  case "$first_line" in
+  *bash*)
+    printf '%s\n' "bash"
+    ;;
+  *)
+    printf '%s\n' "sh"
+    ;;
+  esac
+}
+
+normalize_deps() {
+  deps=$1
+
+  printf '%s\n' "$deps" |
+    tr ',' ' ' |
+    awk '
+      {
+        for (i = 1; i <= NF; i++) {
+          if ($i != "") {
+            if (out == "") {
+              out = $i
+            } else {
+              out = out "," $i
+            }
+          }
+        }
+      }
+      END {
+        print out
+      }
+    '
 }
 
 choose_category() {
@@ -84,21 +144,47 @@ choose_category() {
     done |
     sort >"$categories_file"
 
-  echo "Wähle eine Kategorie:"
-  echo
+  echo "public" >&2
+
+  category_count=$(wc -l <"$categories_file" | tr -d ' ')
+
+  if [ "$category_count" -eq 0 ]; then
+    printf '%s\n' "└── neue Kategorie" >&2
+  else
+    current=0
+    while IFS= read -r category; do
+      current=$((current + 1))
+
+      if [ "$current" -eq "$category_count" ]; then
+        printf '%s\n' "└── $category" >&2
+      else
+        printf '%s\n' "├── $category" >&2
+      fi
+    done <"$categories_file"
+
+    printf '%s\n' "└── neue Kategorie" >&2
+  fi
+
+  echo >&2
 
   count=0
   while IFS= read -r category; do
     count=$((count + 1))
-    printf '  %s) %s\n' "$count" "$category"
+    printf '  %s) %s\n' "$count" "$category" >&2
   done <"$categories_file"
 
-  count=$((count + 1))
-  printf '  %s) %s\n' "$count" "Neue Kategorie erstellen"
+  new_choice=$((count + 1))
+  printf '  %s) %s\n' "$new_choice" "neu" >&2
+  echo >&2
 
-  echo
-  printf '%s' "Auswahl: "
+  printf '%s' "Auswahl: " >&2
   IFS= read -r choice
+
+  case "$choice" in
+  n | N | neu | new)
+    choice=$new_choice
+    ;;
+  esac
 
   case "$choice" in
   *[!0-9]* | "")
@@ -126,8 +212,8 @@ choose_category() {
     return 0
   fi
 
-  if [ "$choice" -eq "$count" ] 2>/dev/null; then
-    printf '%s' "Neue Kategorie: "
+  if [ "$choice" -eq "$new_choice" ] 2>/dev/null; then
+    printf '%s' "Neue Kategorie: " >&2
     IFS= read -r new_category
 
     [ -n "$new_category" ] || die "Category must not be empty."
@@ -152,9 +238,9 @@ prompt_default() {
   default=$2
 
   if [ -n "$default" ]; then
-    printf '%s [%s]: ' "$prompt" "$default"
+    printf '%s [%s]: ' "$prompt" "$default" >&2
   else
-    printf '%s: ' "$prompt"
+    printf '%s: ' "$prompt" >&2
   fi
 
   IFS= read -r value
@@ -171,11 +257,13 @@ main() {
   need_cmd chmod
   need_cmd find
   need_cmd awk
+  need_cmd sed
+  need_cmd tr
 
   source_file=${1:-}
 
   if [ -z "$source_file" ]; then
-    printf '%s' "Pfad zur Script-Datei: "
+    printf '%s' "Pfad zur Script-Datei: " >&2
     IFS= read -r source_file
   fi
 
@@ -207,20 +295,50 @@ main() {
   fi
 
   base_name=${file_name%.*}
-  default_id="$category.$base_name"
 
-  tool_id=$(prompt_default "Tool-ID" "$default_id")
+  tool_id="$category.$base_name"
+  label="$base_name"
+  detected_shell=$(detect_shell "$source_file")
+
+  header_description=$(get_header_value "Description" "$source_file" || true)
+  header_deps=$(get_header_value "Dependencies" "$source_file" || true)
+
+  if [ -z "$header_description" ] || [ "$header_description" = "Short description of what this script does" ]; then
+    header_description="TODO"
+  fi
+
+  if [ -z "$header_deps" ]; then
+    header_deps="$detected_shell"
+  fi
+
+  deps=$(normalize_deps "$header_deps")
+  [ -n "$deps" ] || deps="$detected_shell"
+
+  echo
+  echo "Manifest-Eintrag vorbereiten"
+  echo "============================"
+  echo
+  echo "Automatisch erkannt:"
+  echo "  Tool-ID:       $tool_id"
+  echo "  Source:        public"
+  echo "  Category:      $category"
+  echo "  Label:         $label"
+  echo "  Path:          $manifest_path"
+  echo "  Shell:         $detected_shell"
+  echo "  Dependencies:  $deps"
+  echo
+
   validate_id "$tool_id"
 
   if manifest_has_id "$tool_id"; then
     die "Tool-ID already exists in manifest: $tool_id"
   fi
 
-  label=$(prompt_default "Label" "$base_name")
-  description=$(prompt_default "Beschreibung" "TODO")
-  shell_name=$(prompt_default "Shell sh/bash" "sh")
-  deps=$(prompt_default "Dependencies" "$shell_name")
+  description=$(prompt_default "Beschreibung" "$header_description")
+  deps=$(prompt_default "Dependencies" "$deps")
   risk=$(prompt_default "Risk low/medium/high" "low")
+
+  shell_name="$detected_shell"
 
   validate_no_pipe "$tool_id" "id"
   validate_no_pipe "$category" "category"
@@ -271,6 +389,9 @@ main() {
   echo "Next checks:"
   echo "  sx-ctl admin.validate-manifest"
   echo "  sh tests/check.sh"
+  echo
+  echo "Run script:"
+  echo "  sx-ctl $tool_id"
 }
 
 main "$@"

@@ -5,7 +5,7 @@ set -eu
 # sx-ctl script
 # ID:          category.name
 # Name:        Human readable name
-# Description: Short description of what this script does
+# Description: TODO
 # Dependencies: sh
 # Risk:        low
 # ============================================================
